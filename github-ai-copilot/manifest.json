@@ -1,0 +1,21 @@
+{
+    "manifest_version": 3,
+    "name": "GitHub AI Copilot",
+    "version": "1.0.0",
+    "description": "沉浸式 GitHub 源码分析助手",
+    "permissions": [
+      "sidePanel",
+      "activeTab",
+      "storage"
+    ],
+    "background": {
+      "service_worker": "src/background.ts",
+      "type": "module"
+    },
+    "action": {
+      "default_title": "打开 AI 助手"
+    },
+    "side_panel": {
+        "default_path": "index.html"
+    }
+}
