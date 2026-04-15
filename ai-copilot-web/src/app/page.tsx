@@ -39,7 +39,7 @@ export default function ChatPage() {
         {messages.map(m => (
           <div key={m.id} style={{ margin: '15px 0', color: m.role === 'user' ? '#1890ff' : '#333' }}>
             <strong>{m.role === 'user' ? '你：' : 'AI：'}</strong> 
-            <span style={{ whiteSpace: 'pre-wrap' }}>{m.content || m.text}</span>
+            <span style={{ whiteSpace: 'pre-wrap' }}>{m.parts.filter(p => p?.type === 'text').map(item => item.text).join('')}</span>
           </div>
         ))}
         {status === 'streaming' && <div style={{ color: 'gray', marginTop: '10px' }}>AI 正在阅读文档并思考...</div>}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { streamText } from 'ai';
+import { convertToModelMessages, streamText } from 'ai';
 import { deepseek } from '@ai-sdk/deepseek'; // 👈 官方专属通道
 
 export async function POST (req: Request) {
@@ -43,9 +43,9 @@ export async function POST (req: Request) {
         【React 官方文档内容】:
         ${promptContext}
         `,
-        messages: messages, 
+        messages: await convertToModelMessages(messages), 
     });
     
     // 6. 返回流式响应
-    return result.toTextStreamResponse();
+    return result.toUIMessageStreamResponse()
 }
