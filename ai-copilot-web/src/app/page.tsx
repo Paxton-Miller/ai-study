@@ -13,7 +13,11 @@ import {
   Card, 
   Text, 
   Button, 
-  airtableTheme
+  airtableTheme,
+  CssBaseline,
+  appleTheme,
+  claudeTheme,
+  binanceTheme
 } from "awesome-design-ui";
 import "awesome-design-ui/style.css";
 
@@ -42,8 +46,8 @@ export default function ChatPage() {
 
   return (
     // 2. 注入主题引擎 (这里可以一键切换成 appleTheme 或 airtableTheme 测试通用性)
-    <ThemeProvider theme={airtableTheme}>
-      
+    <ThemeProvider theme={claudeTheme}>
+      <CssBaseline />
       {/* 3. 使用 Container 控制最大宽度和全局居中 */}
       <Container 
         as="main" 
@@ -77,7 +81,7 @@ export default function ChatPage() {
 
             {/* 标题 */}
             <Text as="h1" variant="sectionDisplay">
-              React <span style={{ color: 'var(--ad-colors-text-muted)' }}>Copilot.</span>
+              All the tales that have never been <span style={{ color: 'var(--ad-colors-text-muted)' }}>told.</span>
             </Text>
 
           </Grid>
@@ -103,9 +107,9 @@ export default function ChatPage() {
               backgroundColor: 'var(--ad-colors-background-surface)', 
               borderBottom: '1px solid var(--ad-colors-border-subtle)' 
             }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'var(--ad-colors-background-surfaceGlassHover)' }} />
-              <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'var(--ad-colors-background-surfaceGlassHover)' }} />
-              <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'var(--ad-colors-background-surfaceGlassHover)' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ff5f57' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#febc2e' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#29c742' }} />
               <Text variant="microCode" color="placeholder" style={{ marginLeft: '8px' }}>
                 session_connected
               </Text>
@@ -209,7 +213,8 @@ export default function ChatPage() {
                 />
                 
                 <Button 
-                  variant="solid" // Airtable/Apple 兼容的主按钮
+                  variant="primary" // Airtable/Apple 兼容的主按钮
+                  size="medium"
                   disabled={status !== "ready" && status !== "error"}
                   style={{ borderRadius: 'var(--ad-radii-pill)' }}
                 >
