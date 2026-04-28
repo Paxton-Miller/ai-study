@@ -1,51 +1,48 @@
-import { NextResponse } from "next/server";
-import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { convertToModelMessages, streamText } from 'ai';
-import { deepseek } from '@ai-sdk/deepseek'; // 👈 官方专属通道
+import { convertToModelMessages, stepCountIs, streamText } from "ai";
+import { deepseek } from "@ai-sdk/deepseek";
+import search_react_docs from "./search_react_docs";
+import lookup_weather from "./lookup_weather";
 
-export async function POST (req: Request) {
-    // 1. 抓取网页与解析
-    const targetUrl = 'https://zh-hans.react.dev/reference/react/useState';
-    const loader = new CheerioWebBaseLoader(targetUrl, {
-        selector: 'article'
-    });
-    const docs = await loader.load();
+export const maxDuration = 60;
 
-    // 2. 文本切块
-    const splitter = new RecursiveCharacterTextSplitter({
-        chunkSize: 1000,
-        chunkOverlap: 200
-    });
-    const splitDocs = await splitter.splitDocuments(docs);
+export async function POST(req: Request) {
+  try {
+    const { messages } = await req.json();
 
-    // 3. 安全获取用户消息（防呆处理）
-    let messages = [];
-    try {
-        const body = await req.json();
-        messages = body.messages;
-    } catch (e) {
-        console.log("请求体为空或不是合法的 JSON");
-    }
+    const systemPrompt = `
+      你是一个极客风格的 React 源码与官方文档智能助手。
+      遇到需要查阅 React API、源码细节或文档的问题时，请调用 search_react_docs 工具去查询。
+      遇到需要查阅 地点实时天气状况的问题时，请调用 lookup_weather 工具去查询。
+      使用 Markdown 格式输出。
+    `;
 
-    if (!messages || messages.length === 0) {
-        messages = [{ role: 'user', content: '简单介绍一下 useState？' }];
-    }
+    const tools = {
+      // Function Calling可以并行
+      search_react_docs,
+      lookup_weather,
+    };
 
-    // 4. 组装上下文（取前 3 块）
-    const promptContext = splitDocs.slice(0, 3).map(doc => doc.pageContent).join('\n\n');
-
-    // 5. 呼叫大模型打字机
     const result = await streamText({
-        model: deepseek('deepseek-chat'), 
-        system: `你是一个资深的 React 源码分析专家。请根据下面的【React 官方文档内容】回答用户问题。如果文档里没写，你就说不知道。
-        
-        【React 官方文档内容】:
-        ${promptContext}
-        `,
-        messages: await convertToModelMessages(messages), 
+      model: deepseek("deepseek-chat"),
+      system: systemPrompt,
+      messages: await convertToModelMessages(messages, { tools }),
+      tools,
+      stopWhen: stepCountIs(5),
+      // 一个 Step（步骤）的完整生命周期是：【发请求给模型】 -> 【模型返回指令】 -> 【服务器执行完该指令对应的代码】。只有当这三步全走完，才会触发一次 onStepFinish。
+      onStepFinish: ({ finishReason, toolCalls, toolResults, text }) => {
+        console.log("[Function Calling] step finished:", {
+          finishReason,
+          text, // 面向用户生成的纯自然语言文本，不包含 JSON 指令
+          toolCalls: toolCalls.map((toolCall) => toolCall.toolName), // 大模型在这步里决定要调用的工具列表，以及具体的参数（JSON）
+          toolResults: toolResults.map((toolResult) => toolResult.output),
+        });
+      },
     });
+
+    return result.toUIMessageStreamResponse();
     
-    // 6. 返回流式响应
-    return result.toUIMessageStreamResponse()
+  } catch (error) {
+    console.error("Agentic RAG Pipeline Error:", error);
+    return new Response(JSON.stringify({ error: "服务器异常" }), { status: 500 });
+  }
 }
