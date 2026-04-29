@@ -31,83 +31,104 @@ const weatherCodeMap: Record<number, string> = {
   99: "伴强冰雹雷暴",
 };
 
+export const lookupWeatherSchema = z.object({
+  location: z
+    .string()
+    .describe("要查询天气的地点名称，例如 Shanghai、Tokyo、New York"),
+});
+
+export type LookupWeatherInput = z.infer<typeof lookupWeatherSchema>;
+
+export async function lookupWeather({
+  location,
+}: LookupWeatherInput): Promise<string> {
+  console.log(`[Function Calling] 大模型决定去查询天气: ${location}`);
+
+  const geoRes = await fetch(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+      location
+    )}&count=1&language=zh&format=json`,
+    {
+      method: "GET",
+    }
+  );
+
+  if (!geoRes.ok) {
+    const errorText = await geoRes.text();
+    console.error("[Function Calling] 地理编码查询失败:", errorText);
+    return `查询 ${location} 天气失败，地理编码服务异常`;
+  }
+
+  const geoData = await geoRes.json();
+  const place = geoData.results?.[0];
+
+  if (!place) {
+    return `未找到地点：${location}`;
+  }
+
+  const weatherRes = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`,
+    {
+      method: "GET",
+    }
+  );
+
+  if (!weatherRes.ok) {
+    const errorText = await weatherRes.text();
+    console.error("[Function Calling] 天气查询失败:", errorText);
+    return `查询 ${place.name} 天气失败，天气服务异常`;
+  }
+
+  const weatherData = await weatherRes.json();
+  const current = weatherData.current;
+
+  if (!current) {
+    return `未获取到 ${place.name} 的实时天气数据`;
+  }
+
+  const weatherText =
+    weatherCodeMap[current.weather_code] ?? `天气代码 ${current.weather_code}`;
+
+  return [
+    `地点：${place.name}${place.admin1 ? `, ${place.admin1}` : ""}${
+      place.country ? `, ${place.country}` : ""
+    }`,
+    `时间：${current.time}`,
+    `天气：${weatherText}`,
+    `气温：${current.temperature_2m}${
+      weatherData.current_units?.temperature_2m ?? "°C"
+    }`,
+    `体感温度：${current.apparent_temperature}${
+      weatherData.current_units?.apparent_temperature ?? "°C"
+    }`,
+    `相对湿度：${current.relative_humidity_2m}${
+      weatherData.current_units?.relative_humidity_2m ?? "%"
+    }`,
+    `风速：${current.wind_speed_10m}${
+      weatherData.current_units?.wind_speed_10m ?? "km/h"
+    }`,
+  ].join("\n");
+}
+
+// 统一协议集装箱
+export function lookupWeatherToMcpResult(text: string) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text,
+      },
+    ],
+    structuredContent: {
+      text,
+    },
+  };
+}
+
 const lookup_weather = {
   description: "当用户提问某个地点的实时天气时，调用此工具查询该地点当前天气。",
-  inputSchema: z.object({
-    location: z
-      .string()
-      .describe("要查询天气的地点名称，例如 Shanghai、Tokyo、New York"),
-  }),
-  execute: async ({ location }: { location: string }) => {
-    console.log(`[Function Calling] 大模型决定去查询天气: ${location}`);
-
-    const geoRes = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-        location
-      )}&count=1&language=zh&format=json`,
-      {
-        method: "GET",
-      }
-    );
-
-    if (!geoRes.ok) {
-      const errorText = await geoRes.text();
-      console.error("[Function Calling] 地理编码查询失败:", errorText);
-      return `查询 ${location} 天气失败，地理编码服务异常`;
-    }
-
-    const geoData = await geoRes.json();
-    const place = geoData.results?.[0];
-
-    if (!place) {
-      return `未找到地点：${location}`;
-    }
-
-    const weatherRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`,
-      {
-        method: "GET",
-      }
-    );
-
-    if (!weatherRes.ok) {
-      const errorText = await weatherRes.text();
-      console.error("[Function Calling] 天气查询失败:", errorText);
-      return `查询 ${place.name} 天气失败，天气服务异常`;
-    }
-
-    const weatherData = await weatherRes.json();
-    const current = weatherData.current;
-
-    if (!current) {
-      return `未获取到 ${place.name} 的实时天气数据`;
-    }
-
-    const weatherText =
-      weatherCodeMap[current.weather_code] ??
-      `天气代码 ${current.weather_code}`;
-
-    return [
-      `地点：${place.name}${place.admin1 ? `, ${place.admin1}` : ""}${
-        place.country ? `, ${place.country}` : ""
-      }`,
-      `时间：${current.time}`,
-      `天气：${weatherText}`,
-      `气温：${current.temperature_2m}${
-        weatherData.current_units?.temperature_2m ?? "°C"
-      }`,
-      `体感温度：${current.apparent_temperature}${
-        weatherData.current_units?.apparent_temperature ?? "°C"
-      }`,
-      `相对湿度：${current.relative_humidity_2m}${
-        weatherData.current_units?.relative_humidity_2m ?? "%"
-      }`,
-      `风速：${current.wind_speed_10m}${
-        weatherData.current_units?.wind_speed_10m ?? "km/h"
-      }`,
-    ].join("\n");
-  },
+  inputSchema: lookupWeatherSchema,
+  execute: lookupWeather,
 };
 
-
-export default lookup_weather
+export default lookup_weather;

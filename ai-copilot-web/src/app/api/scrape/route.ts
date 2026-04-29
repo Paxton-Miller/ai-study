@@ -1,11 +1,20 @@
-import { convertToModelMessages, stepCountIs, streamText } from "ai";
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  type ToolSet,
+} from "ai";
 import { deepseek } from "@ai-sdk/deepseek";
-import search_react_docs from "./search_react_docs";
-import lookup_weather from "./lookup_weather";
+import { createMCPClient } from "@ai-sdk/mcp";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import path from "node:path";
 
 export const maxDuration = 60;
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | undefined;
+
   try {
     const { messages } = await req.json();
 
@@ -16,16 +25,45 @@ export async function POST(req: Request) {
       使用 Markdown 格式输出。
     `;
 
-    const tools = {
-      // Function Calling可以并行
-      search_react_docs,
-      lookup_weather,
-    };
+    const tsxCommand =
+      process.platform === "win32"
+        ? path.join(process.cwd(), "node_modules", ".bin", "tsx.cmd")
+        : path.join(process.cwd(), "node_modules", ".bin", "tsx");
+
+    const mcpServerEntry = path.join(
+      process.cwd(),
+      "src",
+      "app",
+      "api",
+      "scrape",
+      "mcp-stdio-server.ts"
+    );
+
+    const requestUrl = new URL(req.url);
+    const mcpTransport = process.env.MCP_TRANSPORT?.toLowerCase() ?? "sse";
+
+    if (mcpTransport === "stdio") {
+      mcpClient = await createMCPClient({
+        transport: new StdioClientTransport({
+          command: tsxCommand,
+          args: [mcpServerEntry],
+        }),
+      });
+    } else {
+      mcpClient = await createMCPClient({
+        transport: {
+          type: "sse",
+          url: `${requestUrl.origin}/api/scrape/mcp`,
+        },
+      });
+    }
+
+    const tools = (await mcpClient.tools()) as ToolSet; // Get下行得到的
 
     const result = await streamText({
       model: deepseek("deepseek-chat"),
       system: systemPrompt,
-      messages: await convertToModelMessages(messages, { tools }),
+      messages: await convertToModelMessages(messages),
       tools,
       stopWhen: stepCountIs(5),
       // 一个 Step（步骤）的完整生命周期是：【发请求给模型】 -> 【模型返回指令】 -> 【服务器执行完该指令对应的代码】。只有当这三步全走完，才会触发一次 onStepFinish。
@@ -37,11 +75,15 @@ export async function POST(req: Request) {
           toolResults: toolResults.map((toolResult) => toolResult.output),
         });
       },
+      onFinish: async () => {
+        await mcpClient?.close();
+      },
     });
 
     return result.toUIMessageStreamResponse();
     
   } catch (error) {
+    await mcpClient?.close();
     console.error("Agentic RAG Pipeline Error:", error);
     return new Response(JSON.stringify({ error: "服务器异常" }), { status: 500 });
   }
