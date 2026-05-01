@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { fetchWithRetry } from "./network";
+import { sanitizeLocation } from "./security";
 
 const weatherCodeMap: Record<number, string> = {
   0: "晴朗",
@@ -34,6 +36,8 @@ const weatherCodeMap: Record<number, string> = {
 export const lookupWeatherSchema = z.object({
   location: z
     .string()
+    .min(1)
+    .max(80)
     .describe("要查询天气的地点名称，例如 Shanghai、Tokyo、New York"),
 });
 
@@ -42,11 +46,13 @@ export type LookupWeatherInput = z.infer<typeof lookupWeatherSchema>;
 export async function lookupWeather({
   location,
 }: LookupWeatherInput): Promise<string> {
-  console.log(`[Function Calling] 大模型决定去查询天气: ${location}`);
+  const safeLocation = sanitizeLocation(location);
 
-  const geoRes = await fetch(
+  console.log(`[Function Calling] 大模型决定去查询天气: ${safeLocation}`);
+
+  const geoRes = await fetchWithRetry(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-      location
+      safeLocation
     )}&count=1&language=zh&format=json`,
     {
       method: "GET",
@@ -56,17 +62,17 @@ export async function lookupWeather({
   if (!geoRes.ok) {
     const errorText = await geoRes.text();
     console.error("[Function Calling] 地理编码查询失败:", errorText);
-    return `查询 ${location} 天气失败，地理编码服务异常`;
+    return `查询 ${safeLocation} 天气失败，地理编码服务异常`;
   }
 
   const geoData = await geoRes.json();
   const place = geoData.results?.[0];
 
   if (!place) {
-    return `未找到地点：${location}`;
+    return `未找到地点：${safeLocation}`;
   }
 
-  const weatherRes = await fetch(
+  const weatherRes = await fetchWithRetry(
     `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`,
     {
       method: "GET",

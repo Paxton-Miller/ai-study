@@ -1,8 +1,14 @@
 import { Pinecone } from "@pinecone-database/pinecone";
 import { z } from "zod";
+import { fetchWithRetry } from "./network";
+import { sanitizeSearchQuery } from "./security";
 
 export const searchReactDocsSchema = z.object({
-  searchQuery: z.string().describe("用来去向量数据库检索的精准搜索关键词"),
+  searchQuery: z
+    .string()
+    .min(1)
+    .max(200)
+    .describe("用来去向量数据库检索的精准搜索关键词"),
 });
 
 export type SearchReactDocsInput = z.infer<typeof searchReactDocsSchema>;
@@ -10,6 +16,7 @@ export type SearchReactDocsInput = z.infer<typeof searchReactDocsSchema>;
 export async function searchReactDocs({
   searchQuery,
 }: SearchReactDocsInput): Promise<string> {
+  const safeSearchQuery = sanitizeSearchQuery(searchQuery);
   const pineconeApiKey = process.env.PINECONE_API_KEY;
   const pineconeIndexName = process.env.PINECONE_INDEX_NAME;
 
@@ -21,9 +28,9 @@ export async function searchReactDocs({
     apiKey: pineconeApiKey,
   });
 
-  console.log(`[Function Calling] 大模型决定去搜索: ${searchQuery}`);
+  console.log(`[Function Calling] 大模型决定去搜索: ${safeSearchQuery}`);
 
-  const embedRes = await fetch("https://api.gptsapi.net/v1/embeddings", {
+  const embedRes = await fetchWithRetry("https://api.gptsapi.net/v1/embeddings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -31,7 +38,7 @@ export async function searchReactDocs({
     },
     body: JSON.stringify({
       model: "text-embedding-3-large",
-      input: searchQuery,
+      input: safeSearchQuery,
       dimensions: 1024,
     }),
   });
