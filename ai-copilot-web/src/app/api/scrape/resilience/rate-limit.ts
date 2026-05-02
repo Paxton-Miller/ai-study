@@ -3,7 +3,7 @@ type RateLimitBucket = {
   resetAt: number;
 };
 
-type RateLimitResult = {
+export type RateLimitResult = {
   allowed: boolean;
   remaining: number;
   retryAfterMs: number;

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { createScrapeMcpServer } from "../../../app/api/scrape/mcp-server";
+import { createScrapeMcpServer } from "../../../app/api/scrape/mcp/create-server";
 
 type SessionStore = Record<string, SSEServerTransport>;
 

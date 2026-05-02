@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { fetchWithRetry } from "./network";
-import { sanitizeLocation } from "./security";
+import { fetchWithRetry } from "../resilience/network";
+import { sanitizeLocation } from "../security/input-sanitizers";
 
 const weatherCodeMap: Record<number, string> = {
   0: "晴朗",
@@ -48,15 +48,13 @@ export async function lookupWeather({
 }: LookupWeatherInput): Promise<string> {
   const safeLocation = sanitizeLocation(location);
 
-  console.log(`[Function Calling] 大模型决定去查询天气: ${safeLocation}`);
+  console.log(`[Function Calling] Weather lookup: ${safeLocation}`);
 
   const geoRes = await fetchWithRetry(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
       safeLocation
     )}&count=1&language=zh&format=json`,
-    {
-      method: "GET",
-    }
+    { method: "GET" }
   );
 
   if (!geoRes.ok) {
@@ -74,9 +72,7 @@ export async function lookupWeather({
 
   const weatherRes = await fetchWithRetry(
     `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`,
-    {
-      method: "GET",
-    }
+    { method: "GET" }
   );
 
   if (!weatherRes.ok) {
@@ -116,25 +112,9 @@ export async function lookupWeather({
   ].join("\n");
 }
 
-// 统一协议集装箱
 export function lookupWeatherToMcpResult(text: string) {
   return {
-    content: [
-      {
-        type: "text" as const,
-        text,
-      },
-    ],
-    structuredContent: {
-      text,
-    },
+    content: [{ type: "text" as const, text }],
+    structuredContent: { text },
   };
 }
-
-const lookup_weather = {
-  description: "当用户提问某个地点的实时天气时，调用此工具查询该地点当前天气。",
-  inputSchema: lookupWeatherSchema,
-  execute: lookupWeather,
-};
-
-export default lookup_weather;

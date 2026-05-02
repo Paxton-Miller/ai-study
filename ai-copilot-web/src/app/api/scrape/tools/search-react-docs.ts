@@ -1,7 +1,7 @@
 import { Pinecone } from "@pinecone-database/pinecone";
 import { z } from "zod";
-import { fetchWithRetry } from "./network";
-import { sanitizeSearchQuery } from "./security";
+import { fetchWithRetry } from "../resilience/network";
+import { sanitizeSearchQuery } from "../security/input-sanitizers";
 
 export const searchReactDocsSchema = z.object({
   searchQuery: z
@@ -24,11 +24,11 @@ export async function searchReactDocs({
     return "检索失败，缺少 Pinecone 环境变量配置";
   }
 
-  const pc = new Pinecone({
+  const pinecone = new Pinecone({
     apiKey: pineconeApiKey,
   });
 
-  console.log(`[Function Calling] 大模型决定去搜索: ${safeSearchQuery}`);
+  console.log(`[Function Calling] React docs search: ${safeSearchQuery}`);
 
   const embedRes = await fetchWithRetry("https://api.gptsapi.net/v1/embeddings", {
     method: "POST",
@@ -52,7 +52,7 @@ export async function searchReactDocs({
   const embedData = await embedRes.json();
   const queryVector = embedData.data[0].embedding;
 
-  const index = pc.index(pineconeIndexName);
+  const index = pinecone.index(pineconeIndexName);
   const queryResponse = await index.query({
     vector: queryVector,
     topK: 3,
@@ -69,23 +69,7 @@ export async function searchReactDocs({
 
 export function searchReactDocsToMcpResult(text: string) {
   return {
-    content: [
-      {
-        type: "text" as const,
-        text,
-      },
-    ],
-    structuredContent: {
-      text,
-    },
+    content: [{ type: "text" as const, text }],
+    structuredContent: { text },
   };
 }
-
-const search_react_docs = {
-  description:
-    "当用户提问关于 React 源码、API 用法或具体技术细节时，必须调用此工具去知识库中检索背景信息。",
-  inputSchema: searchReactDocsSchema,
-  execute: searchReactDocs,
-};
-
-export default search_react_docs;

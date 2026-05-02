@@ -1,4 +1,4 @@
-type AuditStatus = "allowed" | "blocked" | "success" | "error";
+export type AuditStatus = "allowed" | "blocked" | "success" | "error";
 
 export type AuditEntry = {
   time: string;
@@ -18,8 +18,7 @@ function truncate(value: string, maxLength = 160) {
 
 export function summarizeParams(input: unknown): string {
   try {
-    const text = JSON.stringify(input);
-    return truncate(text);
+    return truncate(JSON.stringify(input));
   } catch {
     return "[unserializable-params]";
   }
